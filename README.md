@@ -1,4 +1,4 @@
 pystylus
 ========
 
-A shot at making a python port to the stylus compiler
+A shot at making a python port of the stylus compiler
