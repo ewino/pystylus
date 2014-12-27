@@ -29,6 +29,7 @@ class StylusLexer(object):
 
         self.peeked_tokens = []
         self.indents = []
+        self.prev = None
 
         # helpers
         self.is_in_url = False
@@ -64,9 +65,9 @@ class StylusLexer(object):
         :return: a token, if exists
         :rtype: Token
         """
-        if self.peeked_tokens:
-            return self.peeked_tokens.pop(0)
-        return self._lex_next()
+        token = self.peeked_tokens.pop(0) if self.peeked_tokens else self._lex_next()
+        self.prev = token
+        return token
 
     def _match(self, pattern, flags=0, with_spaces=False):
         if with_spaces:
@@ -241,7 +242,10 @@ class StylusLexer(object):
 
     def _l_comment(self):
         """ Try to match a CSS multi-line comment or stylus' single-line comment """
-        # A stylus comment. This one doesn't get parsed, and gets ignored by the lexer.
+        return self._l_stylus_comment() or self._l_css_comment()
+
+    def _l_stylus_comment(self):
+        """ Try to match stylus' single-line comment. It's ignored by the parser/lexer """
         if self.buf.startswith('//'):
             comment_end = self.buf.find('\n')
             if comment_end == -1:
@@ -249,20 +253,36 @@ class StylusLexer(object):
             self._skip(comment_end)
             return self._lex_next()
 
+    def _l_css_comment(self):
+        """ Try to match a CSS multi-line comment """
         if self.buf.startswith('/*'):
-            comment_end = self.buf.find('*/')
-            if comment_end == -1:
+            comment_end = self.buf.find('*/') + 2  # len('*/')
+            if comment_end == 1:  # not found + len('*/')
                 comment_end = len(self.buf)
-            str = self.buf[:comment_end]
-            lines = str.split('\n')
-            self.line_num += str.count('\n')
+            content = self.buf[:comment_end]
+
+            self.line_num += content.count('\n')
+            self._skip(comment_end)
+
+            # TODO: Find out what this means (ewino@2014-12-27)
+            is_suppress = (content[3] != '!')  # /*!
+            if not is_suppress:
+                content = content[:2] + content[3:]  # timed to be faster than replace('*!', '*', 1)
+            # TODO: Shouldn't this be decided by the parser? (also considering line breaks) (ewino@2014-12-27)
+            is_inline = self.prev and isinstance(self.prev, SemicolonToken)
+            return CommentToken(content, is_suppress, is_inline)
+
+    _l_bool = lex(r'(true|false)\b([ \t]*)', lambda m: BooleanValueToken(m.group(1) == 'true', m.group(2)))
+    """ Try to match a true/false value """
+
+    _l_unicode = lex(r'u\+[0-9a-f?]{1,6}(?:-[0-9a-f]{1,6})?', lambda m: LiteralToken(m.group(0)))
 
 
 def lex(regex, token_func, with_spaces=False):
     """ Tries to match the regex from the beginning of the buffer.
     If it matches, consume all of it (via _skip()) and call token_func with the match
-    :param regex: The regular expression for the token
-    :param token_func: Function to call with the match to return a token
+    :param str regex: The regular expression for the token
+    :param (Match)->Token token_func: Function to call with the match to return a token
     :param with_spaces: Whether to add [ \t]+ to the end of the regex
     :return: The token from token_func or None
     """
@@ -364,3 +384,20 @@ class KeyframesToken(AtRuleToken):
     def __init__(self, vendor):
         super(KeyframesToken, self).__init__('keyframes')
         self.vendor = vendor
+
+
+class CommentToken(ValuableToken):
+    def __init__(self, content, is_suppress, is_inline):
+        super(CommentToken, self).__init__(content)
+        self.is_suppress = is_suppress  # TODO: Is this needed? (or we can just drop the token) (ewino@2014-12-27)
+        self.is_inline = is_inline
+
+
+class BooleanValueToken(ValuableToken):
+    def __init__(self, val, space):
+        """ A boolean value: True or False
+        :param space: The spaces after the value
+        :type val: bool
+        """
+        super(BooleanValueToken, self).__init__(val)
+        self.spaces = space
