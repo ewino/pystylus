@@ -1,14 +1,10 @@
 import re
 
-from tokens import Token, SelectorToken, SpaceToken, \
-    OperatorToken, IdentifierToken, LiteralToken, BooleanValueToken, NumberToken, \
-    StringToken, ColorToken, ParenToken, BraceToken, FunctionToken, AtRuleToken, \
-    KeyframesToken, LiteralCSSToken, AnonymousFunctionToken, IndentToken, \
-    NewLineToken, OutdentToken, SemicolonToken, CommentToken, KeywordToken, \
-    NullToken, EOFToken
+from tokens import *
 from utils import chunks
 from css_consts import units
 
+__all__ = ['StylusLexer']
 
 Match = type(re.match('', ''))
 
@@ -470,7 +466,3 @@ class StylusLexer(object):
     or a single-line comment (//) (we also check that the // sign is not inside
     of an attribute selector like "a[href='//']")
     """
-
-if __name__ == '__main__':
-    l = StylusLexer('a\n\t> b\n\t atr: def;\n\tatr: def')
-    print repr(l)
