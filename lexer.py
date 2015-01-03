@@ -1,7 +1,14 @@
 import re
-from tokens import Token, ValuableToken
+
+from tokens import Token, SelectorToken, SpaceToken, \
+    OperatorToken, IdentifierToken, LiteralToken, BooleanValueToken, NumberToken, \
+    StringToken, ColorToken, ParenToken, BraceToken, FunctionToken, AtRuleToken, \
+    KeyframesToken, LiteralCSSToken, AnonymousFunctionToken, IndentToken, \
+    NewLineToken, OutdentToken, SemicolonToken, CommentToken, KeywordToken, \
+    NullToken, EOFToken
 from utils import chunks
-from values import units, Color
+from values import units
+
 
 Match = type(re.match('', ''))
 
@@ -13,6 +20,27 @@ operator_aliases = {
     'is not': '!=',
     ':=': '?='
 }
+
+
+def lex(regex, token_func, with_spaces=False):
+    """ Tries to match the regex from the beginning of the buffer.
+    If it matches, consume all of it (via _skip()) and call token_func with the
+    match
+    :param str regex: The regular expression for the token
+    :param (Match)->Token token_func: Function to call with the match to return
+        a token
+    :param with_spaces: Whether to add [ \t]+ to the end of the regex
+    :return: The token from token_func or None
+    """
+    def lex_func(self):
+        """
+        :type self: StylusLexer
+        """
+        match = self._match(regex, with_spaces=with_spaces)
+        if match:
+            self._skip(match)
+            return token_func(match)
+    return lex_func
 
 
 class StylusLexer(object):
@@ -50,10 +78,18 @@ class StylusLexer(object):
         Consumes the amount of characters from the beginning of the buffer
         :param (int|Match) amount: The amount of characters to consume
         """
+        match = None
+        has_linebreak = False
         if isinstance(amount, Match):
-            amount = amount.end() + 1  # end() is position of the last letter
+            match = amount.group()
+            has_linebreak = '\n' in match
+            amount = len(match)
         self.buf = self.buf[amount:]
-        self.column += amount
+        if has_linebreak:
+            self.line_num += match.count('\n')
+            self.column = len(match) - match.rindex('\n')
+        else:
+            self.column += amount
 
     def lookahead(self, skip=1):
         """
@@ -76,12 +112,24 @@ class StylusLexer(object):
         self.prev = token
         return token
 
+    def __repr__(self):
+        orig_buf = self.buf
+        tokens = []
+        token = self.next()
+        while not isinstance(token, EOFToken):
+            tokens.append(token)
+            token = self.next()
+        self.buf = orig_buf
+        return repr(tokens)
+
     def _match(self, pattern, flags=0, with_spaces=False):
         if with_spaces:
             pattern += r'[ \t]*'
         return re.match(pattern, self.buf, flags)
 
     def _lex_next(self):
+        line_num = self.line_num
+        col = self.column
         token = (
             self._l_eof()
             or self._l_null()
@@ -93,7 +141,7 @@ class StylusLexer(object):
             or self._l_escaped_char()
             or self._l_important()
             or self._l_literal_css()
-            or self._l_anon_func
+            or self._l_anon_func()
             or self._l_atrule()
             or self._l_function_start()
             or self._l_brace()
@@ -110,8 +158,8 @@ class StylusLexer(object):
             or self._l_space()
             or self._l_selector()
         )
-        token.line_num = self.line_num
-        token.column = self.column
+        token.line_num = line_num
+        token.column = col
         return token
 
     def _l_eof(self):
@@ -120,7 +168,7 @@ class StylusLexer(object):
         """
         if self.buf:
             return
-        if self.indents > 0:
+        if self.indents:
             self.indents.pop()
             return OutdentToken()
         return EOFToken()
@@ -200,7 +248,7 @@ class StylusLexer(object):
 
     def _l_newline_and_indents(self):
         """ Tries to match a new line and a subsequent indent or outdent """
-        match = self._match(r'\n([\t ]*)?')
+        match = self._match(r'\n([\t ]*)')
         if match:
             self._skip(match)
             indent = match.group(1)
@@ -215,7 +263,9 @@ class StylusLexer(object):
                 # NOTE: the JS version only checks the length of the indent
                 # NOTE: ('  ' == '\t '). we compare the indentation exactly.
                 # NOTE: Now let's see if we pass the tests...
-                while self.indents and self.indents[-1].startswith(indent):
+                print 'outing! new indent is %r' % indent
+                while self.indents and self.indents[-1].startswith(indent) \
+                        and self.indents[-1] != indent:
                     self.peeked_tokens.append(OutdentToken())
                     self.indents.pop()
                 return self.peeked_tokens.pop()
@@ -264,7 +314,7 @@ class StylusLexer(object):
             css_buf = re.sub(r'\s*}$', '', css_buf)
             return LiteralCSSToken(css_buf)
 
-    _l_anon_func = lex('@(', lambda m: AnonymousFunctionToken())
+    _l_anon_func = lex('@\(', lambda m: AnonymousFunctionToken())
     """ Try to match an anonymous function start (starts with '@(') """
 
     def _l_atrule(self):
@@ -424,23 +474,6 @@ class StylusLexer(object):
     of an attribute selector like "a[href='//']")
     """
 
-
-def lex(regex, token_func, with_spaces=False):
-    """ Tries to match the regex from the beginning of the buffer.
-    If it matches, consume all of it (via _skip()) and call token_func with the
-    match
-    :param str regex: The regular expression for the token
-    :param (Match)->Token token_func: Function to call with the match to return
-        a token
-    :param with_spaces: Whether to add [ \t]+ to the end of the regex
-    :return: The token from token_func or None
-    """
-    def lex_func(self):
-        """
-        :type self: StylusLexer
-        """
-        match = self._match(regex, with_spaces=with_spaces)
-        if match:
-            self._skip(match)
-            return token_func(match)
-    return lex_func
+if __name__ == '__main__':
+    l = StylusLexer('a\n\t> b\n\t atr: def;\n\tatr: def')
+    print repr(l)
