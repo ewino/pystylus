@@ -9,7 +9,8 @@ class Token(object):
         self.column = 0
 
     def __repr__(self):
-        return '<%s at %d:%d>' % (type(self).__name__, self.line_num, self.column)
+        return '<%s at %d:%d>' % (type(self).__name__, self.line_num,
+                                  self.column)
 
 
 class ValuableToken(Token):
@@ -23,7 +24,8 @@ class ValuableToken(Token):
         return self.val
 
     def __repr__(self):
-        return '<%s (%r) at %d:%d>' % (type(self).__name__, self.val, self.line_num, self.column)
+        return '<%s (%r) at %d:%d>' % (type(self).__name__, self.val,
+                                       self.line_num, self.column)
 
 
 class OutdentToken(Token):
