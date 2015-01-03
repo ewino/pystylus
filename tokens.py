@@ -151,8 +151,9 @@ class NewLineToken(Token):
 
 class NumberToken(ValuableToken):
     """ A number with an optional unit (2, -5.2, 16px, 80.3%) """
-    def __init__(self, val, unit=None):
+    def __init__(self, val, raw, unit=None):
         super(NumberToken, self).__init__(val)
+        self.raw = raw
         self.unit = unit
 
 

@@ -7,7 +7,7 @@ from tokens import Token, SelectorToken, SpaceToken, \
     NewLineToken, OutdentToken, SemicolonToken, CommentToken, KeywordToken, \
     NullToken, EOFToken
 from utils import chunks
-from values import units
+from css_consts import units
 
 
 Match = type(re.match('', ''))
@@ -369,7 +369,7 @@ class StylusLexer(object):
             return
 
         # n(1), nn(2), rgb(3), rgba(4), rrggbb(6), rrggbbaa(8)
-        choices = ['[a-fA-F0-9]{%d}' % l for l in (1, 2, 3, 4, 6, 8)]
+        choices = ['[a-fA-F0-9]{%d}' % length for length in (1, 2, 3, 4, 6, 8)]
         match = self._match('#(%s)' % ('|'.join(choices)), with_spaces=True)
         if match:
             self._skip(match)
@@ -404,11 +404,8 @@ class StylusLexer(object):
                             % '|'.join(units))
         if match:
             self._skip(match)
-            # TODO: apparently needed for https://github.com/
-            # TODO: LearnBoost/stylus/issues/1332
-            # TODO: re-enable when getting to the parser (ewino@2015-1-3)
-            # raw = match.group()
-            return NumberToken(float(match.group(1)), match.group(2))
+            raw = match.group()
+            return NumberToken(float(match.group(1)), raw, match.group(2))
 
     def _l_textual_operator(self):
         """ Try to match the operators: not, and, or, is, is not, isnt,
