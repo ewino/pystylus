@@ -1,6 +1,6 @@
 import re
 
-from tokens import *
+from .tokens import *
 from utils import chunks
 from css_consts import units
 

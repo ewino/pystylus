@@ -1,4 +1,4 @@
-from values import Color
+from ast.colors import Color
 
 
 class Token(object):
