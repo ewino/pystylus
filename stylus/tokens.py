@@ -1,4 +1,12 @@
-from ast.colors import Color
+from ast.values import Color
+
+
+__all__ = ['OutdentToken', 'IndentToken', 'EOFToken', 'NullToken', 'LiteralToken',
+           'SelectorToken', 'LiteralCSSToken', 'SemicolonToken', 'SpaceToken',
+           'IdentifierToken', 'OpeningBraceToken', 'ClosingBraceToken', 'ParenToken',
+           'KeywordToken', 'OperatorToken', 'FunctionToken', 'AnonymousFunctionToken',
+           'AtRuleToken', 'KeyframesToken', 'CommentToken', 'BooleanValueToken',
+           'NewLineToken', 'NumberToken', 'StringToken', 'ColorToken']
 
 
 class Token(object):
@@ -72,14 +80,12 @@ class IdentifierToken(ValuableToken):
     pass
 
 
-class BraceToken(ValuableToken):
-    def __init__(self, is_opening):
-        """
-        :param bool is_opening: Whether this is an opening brace '{'.
-            False for closing one '}'
-        """
-        super(BraceToken, self).__init__('{' if is_opening else '}')
-        self.is_opening = is_opening
+class OpeningBraceToken(Token):
+    """ An opening brace ('{') """
+
+
+class ClosingBraceToken(Token):
+    """ A closing brace ('}') """
 
 
 class ParenToken(ValuableToken):

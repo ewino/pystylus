@@ -56,7 +56,7 @@ class StylusLexer(object):
         # Backslash at line end means to continue at the next line
         input_buffer = re.sub(r'\\ *\n', '\r', input_buffer, flags=re.MULTILINE)
 
-        self.peeked_tokens = []
+        self.stash = []  # where we store peeked tokens
         self.indents = []
         self.prev = None
         self.indentation_type = None
@@ -93,9 +93,9 @@ class StylusLexer(object):
         :param int skip: The number of tokens to 'advance'. 1 or more.
         :return: The token `skip` amount of tokens ahead.
         """
-        for _ in xrange(skip - len(self.peeked_tokens)):
-            self.peeked_tokens.append(self._lex_next())
-        return self.peeked_tokens[skip - 1]
+        for _ in xrange(skip - len(self.stash)):
+            self.stash.append(self._lex_next())
+        return self.stash[skip - 1]
 
     def next(self):
         """
@@ -103,8 +103,7 @@ class StylusLexer(object):
         :return: a token, if exists
         :rtype: Token
         """
-        token = self.peeked_tokens.pop(0) if self.peeked_tokens \
-            else self._lex_next()
+        token = self.stash.pop(0) if self.stash else self._lex_next()
         self.prev = token
         return token
 
@@ -118,12 +117,34 @@ class StylusLexer(object):
         self.buf = orig_buf
         return repr(tokens)
 
+    def push_token(self, token):
+        """
+        Pushes a token to the start of the stash (it will be the
+        next one polled)
+        :param Token token: The token to add
+        """
+        self.stash.insert(0, token)
+
     def _match(self, pattern, flags=0, with_spaces=False):
+        """
+        Performs a match from the start of the buffer
+        :param str pattern: The pattern to match
+        :param int flags: Flags to use while matching
+        :param bool with_spaces: Whether to capture optional spaces and tabs
+            at the end of the match
+        :return: The Match object if found. None otherwise
+        :rtype: Match
+        """
         if with_spaces:
             pattern += r'[ \t]*'
         return re.match(pattern, self.buf, flags)
 
     def _lex_next(self):
+        """
+        Consume the next token from the buffer and returns it
+        :return: The next token (EOF is used for the end of the buffer)
+        :rtype: Token
+        """
         line_num = self.line_num
         col = self.column
         token = (
@@ -262,9 +283,9 @@ class StylusLexer(object):
                 print 'outing! new indent is %r' % indent
                 while self.indents and self.indents[-1].startswith(indent) \
                         and self.indents[-1] != indent:
-                    self.peeked_tokens.append(OutdentToken())
+                    self.stash.append(OutdentToken())
                     self.indents.pop()
-                return self.peeked_tokens.pop()
+                return self.stash.pop()
             # Indent
             elif indent and (not prev_indent or indent.startswith(prev_indent)):
                 self.indents.append(indent)
@@ -343,7 +364,8 @@ class StylusLexer(object):
                 self.is_in_url = True
             return FunctionToken(func_name, match.group(2))
 
-    _l_brace = lex('[{}]', lambda m: BraceToken(m.group() == '{'))
+    _l_brace = lex('[{}]', lambda m: OpeningBraceToken() if m.group() == '{'
+                                     else ClosingBraceToken())
     """ Try to match opening or closing braces '{' or '}' """
 
     def _l_paren(self):
@@ -373,17 +395,17 @@ class StylusLexer(object):
             if len(hex_num) in (2, 6, 8):
                 parts = map(''.join, chunks(hex_num, 2))  # divide to parts
             else:
-                parts = map(lambda x: x * 2, hex_num)  # double each char
+                parts = map(lambda c: c * 2, hex_num)  # double each char
+            values = tuple(map(lambda c: int(c, 16), parts))  # unhex
 
-            parts = tuple(map(lambda x: int(x, 16), parts))  # unhex
             a = 255
-            if len(parts) == 1:
-                r, g, b = parts[0] * 3
-            elif len(parts) == 3:
-                r, g, b = parts
+            if len(values) == 1:
+                r, g, b = values[0] * 3
+            elif len(values) == 3:
+                r, g, b = values
             else:
-                r, g, b, a = parts
-            return ColorToken(r, g, b, a / 255)
+                r, g, b, a = values
+            return ColorToken(r, g, b, a / 255.0)
 
     def _l_string_val(self):
         """  Try to match a string, starting and ending with quote marks """
@@ -464,5 +486,5 @@ class StylusLexer(object):
                       lambda m: SelectorToken(m.group()))
     """ Anything that afterwards has a comma, a line break, an opening brace
     or a single-line comment (//) (we also check that the // sign is not inside
-    of an attribute selector like "a[href='//']")
+    of an attribute selector like "a[href=//]")
     """
