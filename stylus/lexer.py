@@ -364,8 +364,7 @@ class StylusLexer(object):
                 self.is_in_url = True
             return FunctionToken(func_name, match.group(2))
 
-    _l_brace = lex('[{}]', lambda m: OpeningBraceToken() if m.group() == '{'
-                                     else ClosingBraceToken())
+    _l_brace = lex('[{}]', lambda m: OpeningBraceToken() if m.group() == '{' else ClosingBraceToken())
     """ Try to match opening or closing braces '{' or '}' """
 
     def _l_paren(self):
